@@ -2,28 +2,26 @@ from protorpc import messages
 from google.appengine.ext import ndb, db
 
 class Game(ndb.Model) :
+    
+    playerTurn = ndb.IntegerProperty(default=1)
+    gameOver = ndb.BooleanProperty(default=False)
+
     name = ndb.StringProperty(required=True)
-    playerTurn = ndb.IntegerProperty(default=0)
-    game_over = ndb.BooleanProperty(default=False)
+    owner = db.StringProperty(required=True)
+    player1 = ndb.StringProperty(required= True)
+    player2 = ndb.StringProperty(required= True)
+
+
+class GameMiniForm(messages.Message) :
+    name = messages.StringField(1, required=True)
+    player1 = messages.StringField(2, required=True)
+    player2 = messages.StringField(3, required=True)
 
 class GameForm(messages.Message) :
     name = messages.StringField(1, required=True)
-    #users = messages.StringField(2, repeated=True)
-
-class Profile(ndb.Model):
-	"""Profile -- User profile object"""
-	userId = ndb.StringProperty()
-	displayName = ndb.StringProperty()
-	mainEmail = ndb.StringProperty()
-
-
-class ProfileMiniForm(messages.Message):
-	"""ProfileMiniForm -- update Profile form message"""
-	displayName = messages.StringField(1)
-
-
-class ProfileForm(messages.Message):
-	"""ProfileForm -- Profile outbound form message"""
-	userId = messages.StringField(1)
-	displayName = messages.StringField(2)
-	mainEmail = messages.StringField(3)
+    owner = messages.StringField(2, required=True)
+    playerTurn = messages.IntegerField(3, required=True)
+    gameOver = messages.BooleanField(4, required= True)
+    player1 = messages.StringField(5, required=True)
+    player2 = messages.StringField(6, required=True)
+    id = messages.StringField(7, required=True)

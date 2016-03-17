@@ -4,13 +4,21 @@ Contains declarations of endpoint, endpoint methods,
 as well as the ProtoRPC message class and container required
 for endpoint method definition.
 """
+
+from datetime import datetime
+
 import endpoints
 from protorpc import messages
 from protorpc import message_types
 from protorpc import remote
-from models import Game, GameForm, ProfileForm, ProfileMiniForm
+
+from google.appengine.api import memcache
+from google.appengine.api import taskqueue
+from google.appengine.ext import ndb
+
+from models import Game, GameForm, GameMiniForm
 from settings import WEB_CLIENT_ID
-import utils
+from utils import getUserId
 
 EMAIL_SCOPE = endpoints.EMAIL_SCOPE
 API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
@@ -28,66 +36,6 @@ class Hello(messages.Message):
 class BattleshipAPI(remote.Service):
   """Game API"""
 
-  # - - - Profile objects - - - - - - - - - - - - - - - - - - -
-
-  def _copyProfileToForm(self, prof):
-    """Copy relevant fields from Profile to ProfileForm."""
-    # copy relevant fields from Profile to ProfileForm
-    pf = ProfileForm()
-    for field in pf.all_fields():
-      if hasattr(prof, field.name):
-        # convert t-shirt string to Enum; just copy others
-        setattr(pf, field.name, getattr(prof, field.name))
-    pf.check_initialized()
-    return pf
-
-
-  def _getProfileFromUser(self):
-    """Return user Profile from datastore, creating new one if non-existent."""
-    user = endpoints.get_current_user()
-    if not user:
-      raise endpoints.UnauthorizedException('Authorization required')
-    
-    profile = None
-    
-    if not profile:
-      profile = Profile(
-        userId = None,
-        key = None,
-        displayName = user.nickname(), 
-        mainEmail= user.email(),
-      )
-
-    return profile      # return Profile
-
-  def _doProfile(self, save_request=None) :
-    """Get user Profile and return to user, possibly updating it first."""
-    # get user Profile
-    prof = self._getProfileFromUser()
-
-    # if saveProfile(), process user-modifyable fields
-    if save_request:
-      for field in ('displayName'):
-        if hasattr(save_request, field):
-          val = getattr(save_request, field)
-          if val:
-            setattr(prof, field, str(val))
-
-    # return ProfileForm
-    return self._copyProfileToForm(prof)
-
-
-  @endpoints.method(message_types.VoidMessage, ProfileForm,
-          path='profile', http_method='GET', name='getProfile')
-  def getProfile(self, request):
-    """Return user profile."""
-    return self._doProfile()
-
-  @endpoints.method(ProfileMiniForm, ProfileForm,
-          path='profile', http_method='POST', name='saveProfile')
-  def saveProfile(self, request):
-    """Update & return user profile."""
-    return self._doProfile(request)
 
  # - - - Game objects - - - - - - - - - - - - - - - - - - -
   def _createGameObject(self, request):
@@ -127,14 +75,43 @@ class BattleshipAPI(remote.Service):
     
     return request
 
-
-  @endpoints.method(GameForm,GameForm,
+  @endpoints.method(GameMiniForm,GameForm,
                   name='create_game',
                   path= "game",
                   http_method="POST")
   def create_game(self, request) :
     """Create new conference."""
-    return self._createGameObject(request)
+    #get the user ID first and make sure they're authorised
+    user = endpoints.get_current_user()
+    if not user:
+      raise endpoints.UnauthorizedException('Authorization required')
+    
+    user_id = getUserId(user)
+
+    #now create the game entity and insert it
+    game = Game(owner=user_id, 
+      player1=GameMiniForm.get('player1'), 
+      player2=GameMiniForm.get('player2'),
+      name=GameMiniForm.get('name'))
+
+    playerTurn = 1
+    #set the player turn randomly
+    if bool(random.getrandbits(1)) :
+      playerTurn = 1
+    else :
+      playerTurn = 2
+
+    game.playerTurn = playerTurn
+
+    game_key = game.put()
+    url_key = game_key.urlsafe() 
+
+    #return all of the game details, including a game key
+    return GameForm(id=url_key, owner=user_id, 
+      player1=game.player1, 
+      player2=game.player2,
+      name=game.name) 
+
 
 
 
